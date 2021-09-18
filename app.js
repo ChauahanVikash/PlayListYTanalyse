@@ -33,7 +33,7 @@ let totalViews = "" ;
     //evaluate takes two arguments a function and an element if you need to pass it to that function 
     // it runs this on the console of browser
     let totalVideos = await page.evaluate(function fn(element){
-        return element.textContent ;
+        return element.textContent.trim() ;
     } , totalVidsSpanElem);
 
     await page.waitForSelector("yt-formatted-string[class='style-scope ytd-playlist-sidebar-primary-info-renderer']");
@@ -44,31 +44,82 @@ let totalViews = "" ;
         return element.textContent ;
     }, totalViewsStrArr[2]);
 
+    
+    
     console.log(totalViews , totalVideos , playlistName);
-
-    let timesArray = [];
-    let timesElemArr = await page.$$("span[class = 'style-scope ytd-thumbnail-overlay-time-status-renderer']");
-    for(let i = 0 ; i < timesElemArr.length ; ++i){
-        let time = await page.evaluate(function fn(element){
-            return element.textContent ;
-        },timesElemArr[i]);
-        timesArray.push({"time" :time.split("\n")[1] });
+    let loopcount = Math.floor(totalVideos/100)
+    for(let i = 0 ; i < loopcount ; ++i){
+        await page.click(".circle.style-scope.tp-yt-paper-spinner");
+        await waitTillHTMLRendered(page , 5000);
+        console.log("Got 100 videos")
     }
-    //console.log(timesArray);
 
     
-    let namesAnchorArr = await page.$$("a#video-title");
-    for(let i = 0 ; i < namesAnchorArr.length ; ++i){
-        let videoName = await page.evaluate(function fn(element){
-            return element.textContent ;
-        },namesAnchorArr[i]);
-        timesArray[i]["name"] = videoName;
+    let timeNtilteArray = [];
+    let namesAnchorArr = await page.$$("a[id='video-title']");
+    let lastVideoElem = namesAnchorArr[namesAnchorArr.length -1];
+    await page.evaluate(function(element){
+        element.scrollIntoView();
+    }, lastVideoElem);
+    let timesElemArr = await page.$$("span[class = 'style-scope ytd-thumbnail-overlay-time-status-renderer']");
+    console.log(timesElemArr.length , namesAnchorArr.length)
+    for(let i = 0 ; i < namesAnchorArr.length && i <timesElemArr.length ; ++i){
+        let videoNameNtime = await page.evaluate(function fn(elementName , elementTime){
+            return { 
+                name :elementName.textContent.trim() ,
+                duration : elementTime.textContent.trim() 
+            };
+        },namesAnchorArr[i],timesElemArr[i]);
+        
+        timeNtilteArray.push(videoNameNtime);
     }
+    
+    // for(let i = 0 ; i < timesElemArr.length ; ++i){
+    //     let time = await page.evaluate(function fn(element){
+    //         return element.textContent ;
+    //     },timeNtilteArray[i]);
+    //     timeNtilteArray.push({"time" :time.trim() });
+    // }
+    //console.log(timeNtilteArray);
 
-    console.table(timesArray);
+    
+    
+
+    console.table(timeNtilteArray);
 }
 catch(err){
     console.log(err)
 }
     
 })();
+
+const waitTillHTMLRendered = async (page, timeout = 30000) => {
+    const checkDurationMsecs = 1000;
+    const maxChecks = timeout / checkDurationMsecs;
+    let lastHTMLSize = 0;
+    let checkCounts = 1;
+    let countStableSizeIterations = 0;
+    const minStableSizeIterations = 3;
+  
+    while(checkCounts++ <= maxChecks){
+      let html = await page.content();
+      let currentHTMLSize = html.length; 
+  
+      let bodyHTMLSize = await page.evaluate(() => document.body.innerHTML.length);
+  
+      console.log('last: ', lastHTMLSize, ' <> curr: ', currentHTMLSize, " body html size: ", bodyHTMLSize);
+  
+      if(lastHTMLSize != 0 && currentHTMLSize == lastHTMLSize) 
+        countStableSizeIterations++;
+      else 
+        countStableSizeIterations = 0; //reset the counter
+  
+      if(countStableSizeIterations >= minStableSizeIterations) {
+        console.log("Page rendered fully..");
+        break;
+      }
+  
+      lastHTMLSize = currentHTMLSize;
+      await page.waitForTimeout(checkDurationMsecs);
+    }  
+  };
